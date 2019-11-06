@@ -190,14 +190,14 @@ namespace GDetailsApi.GradingSystem
             primaryList = primaryList.Where(s => !string.IsNullOrWhiteSpace(s) && !string.IsNullOrEmpty(s)).Distinct().ToList();
 
 
-            for(int i = 0; i < primaryList.Count(); i++){
-                if(!isInDictionary(primaryList[i])){
-                    string nearestmatch = nearestMatchingWord(primaryList[i]);
-                    if(!string.IsNullOrWhiteSpace(nearestmatch)){
-                        primaryList[i] = nearestmatch;
-                    }
-                }
-            }
+            //for(int i = 0; i < primaryList.Count(); i++){
+            //    if(!isInDictionary(primaryList[i])){
+            //        string nearestmatch = nearestMatchingWord(primaryList[i]);
+            //        if(!string.IsNullOrWhiteSpace(nearestmatch)){
+            //            primaryList[i] = nearestmatch;
+            //        }
+            //    }
+            //}
             return primaryList;
         }
 
@@ -243,6 +243,7 @@ namespace GDetailsApi.GradingSystem
                 if(currentDistance > pastDistance){
                     pastDistance = currentDistance;
                     nearestMatch = nearestTempWord;
+                    Console.WriteLine(currentDistance);
                 }
 
             }
