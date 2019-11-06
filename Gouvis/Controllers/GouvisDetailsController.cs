@@ -65,6 +65,7 @@ public class GouvisDetailsController : ControllerBase
         }
 
         GradingQuery gq = new GradingQuery();
+        
         await gq.Grading(queryString);
         return gq.result.Where(item => item.point != 0).OrderByDescending(item => item.point).ThenByDescending(item => item.name).ThenByDescending(item => item.date);
     }

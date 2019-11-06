@@ -6,27 +6,30 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using F23.StringSimilarity;
 using System.IO;
+using System.Threading;
 
 namespace GDetailsApi.GradingSystem
 {
     public class GradingQuery{
 
         enum GradingPoint{
-            Name = 50,
-            Desc = 25,
+            Name = 25,
+            Desc = 11,
             RawTextName = 80,
-            RawTextDesc = 60,
+            RawTextDesc = 35,
 
-            RawFileName = 100,
-            FileName = 500,
+            RawFileName = 165,
+            FileName = 60,
 
-            Tag = 800
+            Tag = 200
         }
 
         public char[] noUseChar = new char[]{'.', '~', '`', 
         '"', '\'', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',
         '{', '}', '|', ':', ';', '\\', '<', '>', '/', ',', '-', ' ', 
         '+', '=', '_', '[', ']'}; 
+
+        private string conditionquery = "scale is not null and name is not null and description is not null";
 
         private string schemaName = "GouvisDetailsDBSet";
 
@@ -53,7 +56,7 @@ namespace GDetailsApi.GradingSystem
         public void initTheGradingList(){
             SqliteCommand sqliteCommand = sqlite_conn.CreateCommand();
             //await sqlite_conn.OpenAsync();
-            sqliteCommand.CommandText = String.Format("select fileName,cadName, name, scale, date from {0} where scale is not null and name is not null and description is not null;", schemaName);
+            sqliteCommand.CommandText = String.Format("select fileName,cadName, name, scale, date from {0} where {1};", schemaName, conditionquery);
             SqliteDataReader sreader = sqliteCommand.ExecuteReader();
             while(sreader.Read()){
                 returnInitClass rIC = new returnInitClass(Convert.ToString(sreader["fileName"]), Convert.ToString(sreader["cadName"]), 
@@ -68,7 +71,7 @@ namespace GDetailsApi.GradingSystem
         /*MAIN METHOD*/
         public async Task Grading(string queryString){
             /*This queryString is trimmed already*/
-
+            bool stop = false;
             queryString = queryString.Trim().ToLower();
 
             if(indexTageFound(queryString)){
@@ -76,12 +79,17 @@ namespace GDetailsApi.GradingSystem
             }
             
             await sqlite_conn.OpenAsync();
-            
-
 
             initTheGradingList();
 
             List<string> words = wordList(queryString);
+
+            Task temp = Task.Run(()=>
+                {
+                    Thread.Sleep(10000);
+                    stop = true;
+                }
+            );
 
             
             foreach(returnInitClass rIC in result){
@@ -100,15 +108,15 @@ namespace GDetailsApi.GradingSystem
                 Task t4 = Task.Run(()=> {
                     foreach(string str in words){
                         if(str.Length <= 2) continue;
-                        if(str== "wall") {
-                            continue;
-                        }
+                        //if(str== "wall") {
+                        //    continue;
+                        //}
 
                         Task<bool> ti1 = isPartOfProperty("fileName", str, rIC.fileName);
                         Task<bool> ti2 = isPartOfProperty("description", str, rIC.fileName);
                         Task<bool> ti3 = isPartOfProperty("name", str, rIC.fileName);
 
-                        Task.WhenAll(ti1, ti2, ti3);
+                        Task.WaitAll(ti1, ti2, ti3);
 
                         if(ti1.Result){
                              rIC.point += (int)GradingPoint.Name;
@@ -119,13 +127,13 @@ namespace GDetailsApi.GradingSystem
                         }
 
                         if(ti3.Result){
-                            rIC.point += (int)GradingPoint.Name;
+                            rIC.point += (int)GradingPoint.FileName;
                         }
                     }
                 });
 
 
-                await Task.WhenAll(t1, t2, t3, tTag);
+                Task.WaitAll(t1, t2, t3, tTag);
 
                 if(t1.Result){
                      rIC.point += (int)GradingPoint.RawFileName;
@@ -144,9 +152,11 @@ namespace GDetailsApi.GradingSystem
                 }
 
                 await t4;
+
+                if(stop){
+                    return;
+                }
             }
-
-
             await sqlite_conn.CloseAsync();
             
         }
@@ -221,8 +231,8 @@ namespace GDetailsApi.GradingSystem
 
             //int pastDistance = 9999999;
             //int currentDistance = 9999999;
-            double pastDistance = 0;
-            double currentDistance = 0;
+            double pastDistance = -999999;
+            double currentDistance = -999999;
             string nearestTempWord = "";
 
             while(reader.Read()){
@@ -243,7 +253,7 @@ namespace GDetailsApi.GradingSystem
         private bool isTextFileName(string word){
 
             SqliteCommand sCommand = sqlite_conn.CreateCommand();
-            sCommand.CommandText = string.Format("SELECT fileName FROM GouvisDetailsDBSet where fileName LIKE '%{0}%';", word);
+            sCommand.CommandText = string.Format("SELECT fileName FROM {2} where cadName LIKE '%{0}%' AND {1};", word, conditionquery, schemaName);
             sCommand.ExecuteNonQuery();
             SqliteDataReader reader = sCommand.ExecuteReader();
 
@@ -257,8 +267,8 @@ namespace GDetailsApi.GradingSystem
             int result = 0;
             return Task.Run(() =>{
                 SqliteCommand sCommand = sqlite_conn.CreateCommand();
-                sCommand.CommandText = string.Format("SELECT count(*) as Total FROM {0} WHERE fileName = '{1}' AND  {2} LIKE '%{3}%';", 
-                schemaName, fileName, attribute, str);
+                sCommand.CommandText = string.Format("SELECT count(*) as Total FROM {0} WHERE fileName = '{1}' AND {2} LIKE '%{3}%' and {4};", 
+                schemaName, fileName, attribute, str, conditionquery);
                 SqliteDataReader reader = sCommand.ExecuteReader();
 
                 while(reader.Read()){
@@ -280,7 +290,7 @@ namespace GDetailsApi.GradingSystem
             while(reader.Read()){
                 result = Convert.ToInt32(reader["point"]);
             }
-            return result;            
+            return result;
         }
 
         public async void updateTagGrading(postItem item){
